@@ -4,7 +4,6 @@ import type { User } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { getFirestore, collection, getDocs, addDoc, setDoc, doc, query, where, getDoc, Timestamp, updateDoc } from 'firebase/firestore';
 import { app } from '@/lib/firebase';
-import { getAuth, updateProfile } from 'firebase/auth';
 
 const db = getFirestore(app);
 const usersCollection = collection(db, 'users');
@@ -96,16 +95,10 @@ export async function addUserOnLogin(user: { uid: string, displayName?: string |
 }
 
 /**
- * Updates a user's profile name in Firestore and Firebase Auth.
+ * Updates a user's profile name in Firestore.
  */
 export async function updateUserProfile(userId: string, name: string): Promise<void> {
     const userRef = doc(db, 'users', userId);
-    
-    const auth = getAuth(app);
-    // This assumes we can get the current user on the server. This is not reliable.
-    // The auth object needs to be the one from the client.
-    // The client should update its own profile.
-    // The service function should just update the firestore db.
     
     const initials = name
         ? name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
@@ -119,6 +112,7 @@ export async function updateUserProfile(userId: string, name: string): Promise<v
     try {
         await updateDoc(userRef, updatedData);
         revalidatePath('/settings');
+        revalidatePath('/team');
     } catch (error) {
         console.error("Error updating user profile in Firestore: ", error);
         throw new Error('Failed to update user profile in database.');

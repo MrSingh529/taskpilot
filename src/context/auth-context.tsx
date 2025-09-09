@@ -28,6 +28,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      setUser(authUser);
       if (authUser) {
         const plainUser = {
             uid: authUser.uid,
@@ -36,9 +37,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             photoURL: authUser.photoURL
         };
         await addUserOnLogin(plainUser);
-        setUser(authUser);
-      } else {
-        setUser(null);
       }
       setLoading(false);
     });
@@ -47,22 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const signInWithGoogle = async (): Promise<void> => {
     const provider = new GoogleAuthProvider();
-    try {
-        await signInWithPopup(auth, provider);
-    } catch (error) {
-        console.error("Error during Google sign-in:", error);
-        throw error;
-    }
+    await signInWithPopup(auth, provider);
   }
 
   const signOutUser = async () => {
-    try {
-        await signOut(auth);
-        setUser(null); // Explicitly set user to null
-        router.push('/'); // Redirect to login
-    } catch (error) {
-        console.error("Error signing out: ", error);
-    }
+    await signOut(auth);
+    setUser(null);
+    router.push('/');
   };
 
   const signInWithEmail = async (email: string, password: string) => {
@@ -74,20 +63,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: name });
         // The onAuthStateChanged listener will handle adding the user to the db and setting state
-        setUser(userCredential.user);
+        setUser({...userCredential.user, displayName: name});
      }
   }
   
   const updateUserDisplayName = async (name: string) => {
-    if (!user) {
+    if (!auth.currentUser) {
         throw new Error("You must be logged in to update your profile.");
     }
-    await updateUserProfile(user.uid, name);
-    // To update the user object in the context, we can re-create it with the new display name
-    // as the Firebase user object might not update immediately for the client.
-    const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(user)), user, { displayName: name });
+    await updateProfile(auth.currentUser, { displayName: name });
+    await updateUserProfile(auth.currentUser.uid, name);
+
+    // To update the user object in the context, create a new object
+    const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(auth.currentUser)), auth.currentUser, { displayName: name });
     setUser(updatedUser);
   }
+
 
   const value = {
     user,
