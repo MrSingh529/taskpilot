@@ -6,7 +6,7 @@ import { ThemeProvider } from '@/context/theme-provider';
 
 export const metadata: Metadata = {
   title: 'TaskPilot',
-  description: 'Your project management copilot.',
+  description: 'Project management tool by Harpinder Singh.',
 };
 
 export default function RootLayout({
