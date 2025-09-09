@@ -2,9 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { signOutUser as signOut, signInWithEmail as signInWithEmailService, signUpWithEmail as signUpWithEmailService } from '@/services/auth-service';
-import { app } from '@/lib/firebase'; // ensure firebase is initialized
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { signOutUser as signOutService } from '@/services/auth-service';
+import { app } from '@/lib/firebase';
 import { addUserOnLogin } from '@/services/user-service';
 import { useRouter } from 'next/navigation';
 
@@ -29,12 +29,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       if (authUser) {
-        await addUserOnLogin({
+        // Create a plain object to avoid passing non-serializable data
+        const plainUser = {
             uid: authUser.uid,
             displayName: authUser.displayName,
             email: authUser.email,
             photoURL: authUser.photoURL
-        });
+        };
+        await addUserOnLogin(plainUser);
         setUser(authUser);
       } else {
         setUser(null);
@@ -56,20 +58,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutUser = async () => {
     try {
-        await signOut();
-        // The onAuthStateChanged listener will handle setting user to null
-        // and the AppLayout will handle the redirect.
+        await signOutService();
+        setUser(null); // Explicitly set user to null
+        router.push('/'); // Redirect to login
     } catch (error) {
         console.error("Error signing out: ", error);
     }
   };
 
   const signInWithEmail = async (email: string, password: string) => {
-    await signInWithEmailService(email, password);
+    await signInWithEmailAndPassword(auth, email, password);
   }
 
   const signUpWithEmail = async (email: string, password: string, name: string) => {
-    await signUpWithEmailService(email, password, name);
+     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+     if (userCredential.user) {
+        await updateProfile(userCredential.user, { displayName: name });
+        // The onAuthStateChanged listener will handle adding the user to the db
+     }
   }
 
   const value = {
