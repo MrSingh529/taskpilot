@@ -2,10 +2,9 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { signOutUser as signOutService } from '@/services/auth-service';
+import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signOut } from 'firebase/auth';
 import { app } from '@/lib/firebase';
-import { addUserOnLogin } from '@/services/user-service';
+import { addUserOnLogin, updateUserProfile } from '@/services/user-service';
 import { useRouter } from 'next/navigation';
 
 const auth = getAuth(app);
@@ -17,6 +16,7 @@ interface AuthContextType {
   signOutUser: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
+  updateUserDisplayName: (name: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,7 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
       if (authUser) {
-        // Create a plain object to avoid passing non-serializable data
         const plainUser = {
             uid: authUser.uid,
             displayName: authUser.displayName,
@@ -58,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOutUser = async () => {
     try {
-        await signOutService();
+        await signOut(auth);
         setUser(null); // Explicitly set user to null
         router.push('/'); // Redirect to login
     } catch (error) {
@@ -74,8 +73,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
      if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName: name });
-        // The onAuthStateChanged listener will handle adding the user to the db
+        // The onAuthStateChanged listener will handle adding the user to the db and setting state
+        setUser(userCredential.user);
      }
+  }
+  
+  const updateUserDisplayName = async (name: string) => {
+    if (!user) {
+        throw new Error("You must be logged in to update your profile.");
+    }
+    await updateUserProfile(user.uid, name);
+    // To update the user object in the context, we can re-create it with the new display name
+    // as the Firebase user object might not update immediately for the client.
+    const updatedUser = Object.assign(Object.create(Object.getPrototypeOf(user)), user, { displayName: name });
+    setUser(updatedUser);
   }
 
   const value = {
@@ -85,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signOutUser,
     signInWithEmail,
     signUpWithEmail,
+    updateUserDisplayName,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
